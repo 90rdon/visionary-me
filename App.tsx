@@ -145,6 +145,22 @@ export default function App() {
             const task = addTask(args.title);
             return { result: `Added task: ${task.title}` };
           }
+          if (name === 'addSubTask') {
+            const keyword = args.parentTaskKeyword.toLowerCase();
+            const task = tasksRef.current.find(t => t.title.toLowerCase().includes(keyword));
+            if (task) {
+              const newSubTask: SubTask = {
+                id: crypto.randomUUID(),
+                title: args.subTaskTitle,
+                completed: false
+              };
+              setTasks(prev => prev.map(t => 
+                t.id === task.id ? { ...t, subTasks: [...t.subTasks, newSubTask] } : t
+              ));
+              return { result: `Added subtask "${args.subTaskTitle}" to "${task.title}".` };
+            }
+            return { result: `I couldn't find a task matching "${args.parentTaskKeyword}" to add that subtask to.` };
+          }
           if (name === 'markTaskDone') {
              const keyword = args.keyword.toLowerCase();
              const task = tasksRef.current.find(t => t.title.toLowerCase().includes(keyword));

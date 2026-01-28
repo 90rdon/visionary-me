@@ -72,7 +72,7 @@ export class LiveSessionManager {
       name: 'addTask',
       parameters: {
         type: Type.OBJECT,
-        description: 'Add a new todo task to the user\'s list.',
+        description: 'Add a new main todo task to the user\'s list.',
         properties: {
           title: {
             type: Type.STRING,
@@ -80,6 +80,25 @@ export class LiveSessionManager {
           },
         },
         required: ['title'],
+      },
+    };
+
+    const addSubTaskTool: FunctionDeclaration = {
+      name: 'addSubTask',
+      parameters: {
+        type: Type.OBJECT,
+        description: 'Add a specific subtask to an existing main task.',
+        properties: {
+          parentTaskKeyword: {
+            type: Type.STRING,
+            description: 'A keyword or title of the main task this subtask belongs to.',
+          },
+          subTaskTitle: {
+            type: Type.STRING,
+            description: 'The title of the subtask to add.',
+          },
+        },
+        required: ['parentTaskKeyword', 'subTaskTitle'],
       },
     };
 
@@ -102,7 +121,7 @@ export class LiveSessionManager {
       name: 'decomposeTask',
       parameters: {
         type: Type.OBJECT,
-        description: 'Breaks down a task into smaller subtasks. You MUST call this when the user asks for a breakdown or help planning. The tool will return the specific steps generated; you must use those steps in your verbal response to stay in sync with the UI.',
+        description: 'Breaks down a task into smaller subtasks automatically using AI. You MUST call this when the user asks for a breakdown or help planning.',
         properties: {
           taskTitle: {
             type: Type.STRING,
@@ -132,8 +151,8 @@ export class LiveSessionManager {
       },
       config: {
         responseModalities: [Modality.AUDIO],
-        tools: [{ functionDeclarations: [addTaskTool, markTaskDoneTool, decomposeTaskTool] }],
-        systemInstruction: "You are Nebula, a futuristic productivity AI. When a user asks to break down a task, ALWAYS use the 'decomposeTask' tool first. Once the tool returns the subtasks, describe them to the user. Do not make up your own steps; strictly use the ones returned by the tool to ensure you stay in sync with what the user sees on their screen.",
+        tools: [{ functionDeclarations: [addTaskTool, addSubTaskTool, markTaskDoneTool, decomposeTaskTool] }],
+        systemInstruction: "You are Nebula, a futuristic productivity AI. You help users manage tasks and subtasks. Use 'addTask' for new main tasks, 'addSubTask' to add a specific step to an existing task, and 'decomposeTask' to automatically generate a full plan for a task. Always stay in sync with the user's list.",
         speechConfig: {
           voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } }
         }
