@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
     // Set base to './' so it works on any GitHub Pages path (e.g., username.github.io/repo-name/)
     base: './',
     define: {
-      'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.API_KEY)
+      'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.API_KEY || process.env.GEMINI_API_KEY || process.env.API_KEY)
     },
     build: {
       outDir: 'dist',
