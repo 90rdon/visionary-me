@@ -354,7 +354,7 @@ export default function App() {
 
   const toggleVoiceMode = async () => {
     if (isAiDisabled) {
-      showToast("Voice core requires a valid API Protocol.", "error");
+      showToast("Visionary requires a valid API key.", "error");
       return;
     }
 
@@ -387,7 +387,7 @@ export default function App() {
             setIsVoiceActive(true);
             setVoiceMode(VisualizerMode.LISTENING);
             setVoiceStatus(VoiceStatus.CONNECTED);
-            showToast("Visionary Aligned.", "success");
+            showToast("Visionary connected.", "success");
             isConnectingRef.current = false;
           },
           onClose: (wasUserClosing) => {
@@ -405,7 +405,7 @@ export default function App() {
           },
           onError: (err) => {
             console.error("Voice Error:", err);
-            showToast("Core Link Failure.", "error");
+            showToast("Connection failed.", "error");
             setVoiceStatus(VoiceStatus.ERROR);
             isConnectingRef.current = false;
             setTimeout(() => setVoiceStatus(VoiceStatus.IDLE), 3000);
@@ -415,24 +415,30 @@ export default function App() {
             if (name === 'addTask') {
               const parent = args.parentKeyword ? findByKeyword(tasksRef.current, args.parentKeyword) : null;
               addItem(args.title, parent?.id);
-              showToast(`Goal Added: ${args.title}`, "success");
-              return { status: 'added' };
+              const location = parent ? `under "${parent.title}"` : 'to the list';
+              showToast(`Added: ${args.title}`, "success");
+              return { status: 'added', task: args.title, location, message: `Added "${args.title}" ${location}.` };
             }
             if (name === 'markTaskDone') {
               const match = findByKeyword(tasksRef.current, args.keyword);
               if (match) {
                 toggleComplete(match.id);
-                showToast(`Task Conquered: ${match.title}`, "success");
+                showToast(`Completed: ${match.title}`, "success");
+                return { status: 'completed', task: match.title, message: `Marked "${match.title}" as complete.` };
               }
-              return { status: 'completed' };
+              return { status: 'not_found', message: `Could not find a task matching "${args.keyword}".` };
             }
             if (name === 'decomposeTask') {
               const match = findByKeyword(tasksRef.current, args.taskTitle);
               if (match) {
-                handleBreakdownNode(match.id);
-                showToast(`Mapping Path for: ${match.title}`, "info");
+                showToast(`Breaking down: ${match.title}`, "info");
+                // Don't await - let it run async so we don't block the WebSocket
+                handleBreakdownNode(match.id).then(() => {
+                  showToast(`Expanded: ${match.title}`, "success");
+                });
+                return { status: 'breaking_down', task: match.title, message: `Breaking down "${match.title}" into steps. They will appear in the list momentarily.` };
               }
-              return { status: 'vision_expanded' };
+              return { status: 'not_found', message: `Could not find a task matching "${args.taskTitle}".` };
             }
             return { error: 'Unknown tool' };
           }
@@ -455,20 +461,7 @@ export default function App() {
         <div className="absolute top-[-20%] left-[-10%] w-[80vw] h-[80vw] bg-nebula-900/10 rounded-full blur-[120px]" />
       </div>
 
-      {/* Intelligence Source Indicator */}
-      <div className="fixed top-4 right-4 md:right-8 z-20 flex gap-2">
-        {lastUsedProvider === 'LOCAL_NANO' && (
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 text-xs font-bold uppercase tracking-wider ${isModelDownloading ? 'animate-pulse' : ''}`}>
-            <Cpu size={14} />
-            {isModelDownloading ? "Acquiring Neural Core..." : "Local Neural Core"}
-          </div>
-        )}
-        {lastUsedProvider === 'CLOUD_GEMINI' && (
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-nebula-500/20 bg-nebula-500/10 text-nebula-400 text-xs font-bold uppercase tracking-wider">
-            <CloudLightning size={14} /> Cloud Uplink
-          </div>
-        )}
-      </div>
+      {/* Intelligence Source Indicator - Moved to Mic Button */}
 
       {/* API Protocol Guard Banner */}
       {isAiDisabled && !lastUsedProvider && (
@@ -494,22 +487,48 @@ export default function App() {
         <header className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-nebula-100 to-nebula-500 cursor-pointer" onClick={() => setFocusedId(null)}>
-              Visionary.me
+              Visionary (Me)
             </h1>
             <p className="text-slate-500 text-[10px] md:text-xs mt-1 uppercase tracking-[0.3em] font-medium flex items-center gap-2">
               Architect of Ambition
             </p>
           </div>
-          <Button
-            variant={isVoiceActive ? "voice" : "secondary"}
-            onClick={toggleVoiceMode}
-            disabled={isAiDisabled}
-            className="rounded-full w-14 h-14 !p-0 shadow-2xl"
-          >
-            {voiceStatus === VoiceStatus.IDLE ? <Mic size={24} /> :
-              voiceStatus === VoiceStatus.CONNECTING ? <Loader2 className="animate-spin" size={24} /> :
-                <MicOff size={24} />}
-          </Button>
+          <div className="relative group/mic isolate">
+            {/* Anime Electric Border Effect - Only active when mic is OFF */}
+            {!isVoiceActive && (
+              <>
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[125%] h-[125%] bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-cyan-400 rounded-full blur-sm opacity-0 animate-electric-pulse -z-10" />
+                <div className="absolute inset-[-3px] rounded-full overflow-hidden -z-10 animate-flash-finish opacity-0">
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200%] h-[200%] bg-[conic-gradient(from_0deg,transparent_0_340deg,white_360deg)] animate-spin-slow opacity-60" />
+                </div>
+              </>
+            )}
+
+            <Button
+              variant={isVoiceActive ? "voice" : "secondary"}
+              onClick={toggleVoiceMode}
+              disabled={isAiDisabled}
+              className="rounded-full w-14 h-14 !p-0 shadow-2xl relative z-20 border-none ring-1 ring-white/10"
+            >
+              {voiceStatus === VoiceStatus.IDLE ? <Mic size={24} /> :
+                voiceStatus === VoiceStatus.CONNECTING ? <Loader2 className="animate-spin" size={24} /> :
+                  <MicOff size={24} />}
+            </Button>
+
+            {/* Subtle Intelligence Indicator */}
+            <div className="absolute -top-1 -right-1 z-30 pointer-events-none">
+              {lastUsedProvider === 'LOCAL_NANO' && (
+                <div className={`w-6 h-6 rounded-full bg-slate-900 border flex items-center justify-center shadow-lg ${isVoiceActive ? 'border-red-500/50 text-red-400' : 'border-emerald-500/50 text-emerald-400'} ${isModelDownloading ? 'animate-pulse' : ''}`} title="Local Neural Core">
+                  <Cpu size={12} />
+                </div>
+              )}
+              {lastUsedProvider === 'CLOUD_GEMINI' && (
+                <div className={`w-6 h-6 rounded-full bg-slate-900 border flex items-center justify-center shadow-lg ${isVoiceActive ? 'border-red-500/50 text-red-400' : 'border-nebula-500/50 text-nebula-400'}`} title="Cloud Uplink">
+                  <CloudLightning size={12} />
+                </div>
+              )}
+            </div>
+          </div>
         </header>
 
         {isVoiceActive && (
@@ -600,7 +619,34 @@ export default function App() {
         .scale-in-center { animation: scale-in-center 0.3s cubic-bezier(0.250, 0.460, 0.450, 0.940) both; }
         .animate-fade-in { animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .animate-electric-pulse {
+          animation: electricPulse 4s ease-in-out infinite;
+        }
+        @keyframes electricPulse {
+          0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+          50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.15); }
+          100% { opacity: 0; transform: translate(-50%, -50%) scale(1.3); }
+        }
+
+        .animate-flash-finish {
+           animation: flashFinish 3s ease-out infinite;
+           animation-delay: 1s;
+        }
+        @keyframes flashFinish {
+           0% { opacity: 0; }
+           30% { opacity: 0.8; }
+           100% { opacity: 0; }
+        }
+
+        .animate-spin-slow {
+          animation: spin 3s linear infinite;
+        }
+        @keyframes spin {
+          from { transform: translate(-50%, -50%) rotate(0deg); }
+          to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
       `}</style>
-    </div>
+    </div >
   );
 }

@@ -145,6 +145,7 @@ export class LiveSessionManager {
   private sources: Set<AudioBufferSourceNode> = new Set();
   private callbacks: LiveConnectionCallbacks;
   private isUserClosing: boolean = false;
+  private isConnected: boolean = false;
 
   constructor(callbacks: LiveConnectionCallbacks) {
     this.callbacks = callbacks;
@@ -217,14 +218,35 @@ export class LiveSessionManager {
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         callbacks: {
           onopen: () => {
+            this.isConnected = true;
             this.callbacks.onStatusChange?.('connected');
             this.callbacks.onOpen();
             this.startAudioInputStream(stream);
+
+            // Trigger the AI to greet the user
+            if (this.sessionPromise) {
+              this.sessionPromise.then(session => {
+                setTimeout(() => {
+                  if (!this.isConnected) return; // Don't send if already disconnected
+                  try {
+                    session.sendClientContent({
+                      turns: [{ role: 'user', parts: [{ text: 'Session started. Please introduce yourself warmly.' }] }],
+                      turnComplete: true
+                    });
+                  } catch (e) {
+                    // Silently ignore - connection may be closing
+                  }
+                }, 1000);
+              });
+            }
           },
           onmessage: async (message: LiveServerMessage) => {
             this.handleServerMessage(message);
           },
-          onclose: () => this.callbacks.onClose(this.isUserClosing),
+          onclose: () => {
+            this.isConnected = false;
+            this.callbacks.onClose(this.isUserClosing);
+          },
           onerror: (e) => this.callbacks.onError(e)
         },
         config: {
@@ -234,7 +256,22 @@ export class LiveSessionManager {
 Your user is a high-level thinker who focuses on outcomes, not details. 
 
 CORE MISSION:
-You are their Chief of Staff. You are responsible for RECORDING all actionable advice into the task list. 
+You are their Chief of Staff. You are responsible for RECORDING all actionable advice into the task list.
+
+FIRST IMPRESSION (IMPORTANT):
+When greeting the user, be warm and VARIED - never use the same words twice! 
+Keep it brief (8-12 seconds) and cover:
+- A friendly hello
+- Mention you help turn big ideas into actionable steps
+- Ask what they're working on
+
+EXAMPLE STYLES (don't repeat exactly - create your own each time):
+- "Hey there! Ready to turn some big ideas into action? What's on your mind?"
+- "Welcome back! I'm here to help map out your vision. What are we tackling today?"
+- "Hi! Let's break down something great together. What goal can I help you with?"
+- "Good to see you! Got a vision? I'll help you plan the path. What's the big idea?"
+
+Be natural and creative with your greeting every time.
 
 OPERATIONAL PROTOCOL:
 1. RECORD EVERYTHING: Whenever you give advice, suggest a step, or identify an obstacle, immediately call 'addTask' to put it in the UI. Do not wait for them to ask.
@@ -270,8 +307,9 @@ Always be proactive. If you see a path, map it. If you hear a goal, record it.`,
       this.callbacks.onVolumeLevel(Math.sqrt(sum / inputData.length));
 
       const pcmBlob = createPcmBlob(inputData);
-      if (this.sessionPromise) {
+      if (this.sessionPromise && this.isConnected) {
         this.sessionPromise.then((session) => {
+          if (!this.isConnected) return; // Double-check before sending
           try { session.sendRealtimeInput({ media: pcmBlob }); }
           catch (e) { /* connection might be closing */ }
         });
@@ -311,6 +349,7 @@ Always be proactive. If you see a path, map it. If you hear a goal, record it.`,
   }
 
   async disconnect() {
+    this.isConnected = false;
     this.isUserClosing = true;
 
     if (this.processor) {
