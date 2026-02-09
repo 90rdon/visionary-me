@@ -320,19 +320,35 @@ Always be proactive. If you see a path, map it. If you hear a goal, record it.`,
   }
 
   private async handleServerMessage(message: LiveServerMessage) {
-    const base64Audio = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-    if (base64Audio && this.outputAudioContext) {
-      if (this.outputAudioContext.state === 'suspended') await this.outputAudioContext.resume();
-      this.nextStartTime = Math.max(this.outputAudioContext.currentTime, this.nextStartTime);
-      const audioBuffer = await decodeAudioData(base64ToBytes(base64Audio), this.outputAudioContext, 24000);
-      const source = this.outputAudioContext.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(this.outputAudioContext.destination);
-      source.addEventListener('ended', () => this.sources.delete(source));
-      source.start(this.nextStartTime);
-      this.nextStartTime += audioBuffer.duration;
-      this.sources.add(source);
+    // Extract transcript text from model turns
+    const parts = message.serverContent?.modelTurn?.parts || [];
+    for (const part of parts) {
+      // Handle audio data
+      if (part.inlineData?.data && this.outputAudioContext) {
+        const base64Audio = part.inlineData.data;
+        if (this.outputAudioContext.state === 'suspended') await this.outputAudioContext.resume();
+        this.nextStartTime = Math.max(this.outputAudioContext.currentTime, this.nextStartTime);
+        const audioBuffer = await decodeAudioData(base64ToBytes(base64Audio), this.outputAudioContext, 24000);
+        const source = this.outputAudioContext.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(this.outputAudioContext.destination);
+        source.addEventListener('ended', () => this.sources.delete(source));
+        source.start(this.nextStartTime);
+        this.nextStartTime += audioBuffer.duration;
+        this.sources.add(source);
+      }
+      // Handle text transcripts
+      if (part.text) {
+        this.callbacks.onTranscript(part.text);
+      }
     }
+
+    // Also check for input transcription (user's speech-to-text)
+    const inputTranscript = (message as any).serverContent?.inputTranscript?.text;
+    if (inputTranscript) {
+      this.callbacks.onTranscript(`You: ${inputTranscript}`);
+    }
+
     if (message.toolCall?.functionCalls) {
       for (const fc of message.toolCall.functionCalls) {
         if (!fc.name) continue;
